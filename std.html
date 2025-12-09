@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Management System</title>
+  <style>
+    :root{ --bg:#f6f8fb; --card:#ffffff; --accent:#0b5cff; --muted:#6b7280; }
+    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); margin:0; padding:28px; color:#0f172a}
+    .container{max-width:980px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    h1{font-size:20px;margin:0}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(12,13,14,0.06)}
+    form.inline{display:flex;gap:8px;flex-wrap:wrap}
+    input, select, button{padding:10px 12px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px}
+    input:focus, select:focus{outline:none;box-shadow:0 0 0 3px rgba(11,92,255,0.08);border-color:var(--accent)}
+    .actions{display:flex;gap:8px}
+    .primary{background:var(--accent);color:#fff;border:none}
+    .danger{background:#ff4d4f;color:#fff;border:none}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px 8px;border-bottom:1px solid #f1f5f9;text-align:left}
+    th{color:var(--muted);font-weight:600;font-size:13px}
+    .muted{color:var(--muted);font-size:13px}
+    .toolbar{display:flex;gap:8px;align-items:center}
+    .search{flex:1}
+    .small{font-size:13px;padding:6px 8px}
+    @media (max-width:640px){ .inline{flex-direction:column} table, thead, tbody, th, td, tr{display:block} th{display:none} td{border:0;padding:10px 0} td::before{content:attr(data-label);display:block;font-weight:600;margin-bottom:6px} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Student Management System</h1>
+      <div class="muted">Single-file webpage — data stored in localStorage</div>
+    </header>
+
+    <section class="card">
+      <form id="addForm" class="inline" onsubmit="return false">
+        <input id="idInput" placeholder="Student ID" required />
+        <input id="nameInput" placeholder="Student Name" required />
+        <input id="ageInput" placeholder="Age" type="number" min="1" />
+        <input id="courseInput" placeholder="Course" />
+        <input id="marksInput" placeholder="Marks" type="number" min="0" />
+        <div class="actions">
+          <button id="addBtn" class="primary">Add Student</button>
+          <button id="clearBtn" type="button">Clear</button>
+        </div>
+      </form>
+
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <div class="toolbar" style="flex:1">
+          <input id="searchInput" class="search" placeholder="Search by name" />
+          <select id="filterCourse" style="min-width:160px">
+            <option value="">All courses</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="saveBtn" class="small">Save (localStorage)</button>
+          <button id="exportBtn" class="small">Export JSON</button>
+          <button id="importBtn" class="small">Import JSON</button>
+        </div>
+      </div>
+
+      <div style="overflow:auto;max-height:420px">
+        <table id="studentsTable" aria-live="polite">
+          <thead>
+            <tr>
+              <th>ID</th><th>Name</th><th>Age</th><th>Course</th><th>Marks</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- Update modal (simple) -->
+    <div id="modal" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(2,6,23,0.45)">
+      <div style="width:520px;max-width:94%;background:white;border-radius:12px;padding:16px;box-shadow:0 12px 40px rgba(2,6,23,0.2)">
+        <h3 style="margin:0 0 8px">Update Student</h3>
+        <form id="updateForm" onsubmit="return false" class="inline">
+          <input id="u_id" placeholder="ID" disabled />
+          <input id="u_name" placeholder="Name" />
+          <input id="u_age" placeholder="Age" type="number" min="1" />
+          <input id="u_course" placeholder="Course" />
+          <input id="u_marks" placeholder="Marks" type="number" min="0" />
+          <div class="actions" style="margin-left:auto">
+            <button id="updateSave" class="primary">Save</button>
+            <button id="updateCancel" type="button">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Data format: [[id, name, age, course, marks], ...]
+    let students = [];
+
+    // Elements
+    const tbody = document.querySelector('#studentsTable tbody');
+    const idInput = document.getElementById('idInput');
+    const nameInput = document.getElementById('nameInput');
+    const ageInput = document.getElementById('ageInput');
+    const courseInput = document.getElementById('courseInput');
+    const marksInput = document.getElementById('marksInput');
+    const addBtn = document.getElementById('addBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const searchInput = document.getElementById('searchInput');
+    const filterCourse = document.getElementById('filterCourse');
+    const saveBtn = document.getElementById('saveBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    const modal = document.getElementById('modal');
+    const u_id = document.getElementById('u_id');
+    const u_name = document.getElementById('u_name');
+    const u_age = document.getElementById('u_age');
+    const u_course = document.getElementById('u_course');
+    const u_marks = document.getElementById('u_marks');
+    const updateSave = document.getElementById('updateSave');
+    const updateCancel = document.getElementById('updateCancel');
+
+    // init
+    loadFromLocalStorage();
+    renderTable();
+    populateCourseFilter();
+
+    // Helpers
+    function renderTable(filterName = '', filterCourseVal = ''){
+      tbody.innerHTML = '';
+      const filtered = students.filter(s => {
+        const matchesName = !filterName || s[1].toLowerCase().includes(filterName.toLowerCase());
+        const matchesCourse = !filterCourseVal || s[3] === filterCourseVal;
+        return matchesName && matchesCourse;
+      });
+
+      if(filtered.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" class="muted">No students found.</td>';
+        tbody.appendChild(tr);
+        return;
+      }
+
+      filtered.forEach(student => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td data-label="ID">${escapeHtml(student[0])}</td>
+          <td data-label="Name">${escapeHtml(student[1])}</td>
+          <td data-label="Age">${escapeHtml(student[2]||'')}</td>
+          <td data-label="Course">${escapeHtml(student[3]||'')}</td>
+          <td data-label="Marks">${escapeHtml(student[4]||'')}</td>
+          <td>
+            <button class="small" onclick='onEdit("${encodeForJs(student[0])}")'>Edit</button>
+            <button class="small" onclick='onDelete("${encodeForJs(student[0])}")'>Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(text){
+      if(text === undefined || text === null) return '';
+      return String(text).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m]; });
+    }
+    function encodeForJs(text){ return String(text).replace(/"/g,'\"').replace(/'/g,"\\'"); }
+
+    // Add student
+    addBtn.addEventListener('click', () => {
+      const id = idInput.value.trim();
+      const name = nameInput.value.trim();
+      const age = ageInput.value.trim();
+      const course = courseInput.value.trim();
+      const marks = marksInput.value.trim();
+
+      if(!id || !name){ alert('Please provide at least ID and Name'); return; }
+
+      // prevent duplicate IDs
+      if(students.some(s => s[0] === id)) { alert('Student ID already exists'); return; }
+
+      const row = [id, name, age, course, marks];
+      students.push(row);
+      renderTable(searchInput.value, filterCourse.value);
+      populateCourseFilter();
+      clearInputs();
+    });
+
+    clearBtn.addEventListener('click', clearInputs);
+    function clearInputs(){ idInput.value=''; nameInput.value=''; ageInput.value=''; courseInput.value=''; marksInput.value=''; idInput.focus(); }
+
+    // Search & filter
+    searchInput.addEventListener('input', () => renderTable(searchInput.value, filterCourse.value));
+    filterCourse.addEventListener('change', () => renderTable(searchInput.value, filterCourse.value));
+
+    // Edit
+    window.onEdit = function(id){
+      const student = students.find(s => s[0] === id);
+      if(!student) return alert('Student not found');
+      u_id.value = student[0];
+      u_name.value = student[1];
+      u_age.value = student[2];
+      u_course.value = student[3];
+      u_marks.value = student[4];
+      modal.style.display = 'flex';
+    }
+
+    updateCancel.addEventListener('click', () => modal.style.display = 'none');
+    updateSave.addEventListener('click', () => {
+      const id = u_id.value;
+      const idx = students.findIndex(s => s[0] === id);
+      if(idx === -1) return alert('Student not found');
+      students[idx][1] = u_name.value.trim();
+      students[idx][2] = u_age.value.trim();
+      students[idx][3] = u_course.value.trim();
+      students[idx][4] = u_marks.value.trim();
+      modal.style.display = 'none';
+      renderTable(searchInput.value, filterCourse.value);
+      populateCourseFilter();
+    });
+
+    // Delete
+    window.onDelete = function(id){
+      if(!confirm('Delete student with ID ' + id + '?')) return;
+      const idx = students.findIndex(s => s[0] === id);
+      if(idx>-1){ students.splice(idx,1); renderTable(searchInput.value, filterCourse.value); populateCourseFilter(); }
+    }
+
+    // Save to localStorage
+    saveBtn.addEventListener('click', () => {
+      localStorage.setItem('students_data', JSON.stringify(students));
+      alert('Saved to localStorage');
+    });
+
+    function loadFromLocalStorage(){
+      try{
+        const raw = localStorage.getItem('students_data');
+        if(raw) students = JSON.parse(raw) || [];
+      }catch(e){ students = []; }
+    }
+
+    // Export & Import JSON
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(students, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'students.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', () => {
+      const input = document.createElement('input'); input.type='file'; input.accept='application/json';
+      input.onchange = e => {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try{
+            const data = JSON.parse(ev.target.result);
+            if(Array.isArray(data)){
+              students = data.map(r => [r[0], r[1], r[2], r[3], r[4]]);
+              renderTable(); populateCourseFilter(); alert('Imported successfully');
+            } else alert('Invalid file format');
+          }catch(err){ alert('Failed to parse JSON'); }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    });
+
+    function populateCourseFilter(){
+      const courses = Array.from(new Set(students.map(s => s[3]).filter(Boolean)));
+      const prev = filterCourse.value;
+      filterCourse.innerHTML = '<option value="">All courses</option>' + courses.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      filterCourse.value = prev || '';
+    }
+
+    // initial render (if any students exist)
+    renderTable();
+
+  </script>
+</body>
+</html>
