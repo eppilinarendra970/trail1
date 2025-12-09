@@ -8,7 +8,7 @@ DATA_FILE = "students.json"
 LOCK = threading.Lock()
 
 app = Flask(__name__, static_folder="static", static_url_path="")
-CORS(app)  # you can remove if frontend served from same origin
+CORS(app)  
 
 def load_students():
     if not os.path.exists(DATA_FILE):
@@ -45,7 +45,6 @@ def api_create_student():
     if not payload:
         return jsonify({"error": "Invalid JSON"}), 400
 
-    # Expect payload to be dict: { "id": "...", "name": "...", "age":"", "course":"", "marks":"" }
     required = ["id", "name"]
     if not all(k in payload and str(payload[k]).strip() for k in required):
         return jsonify({"error": "id and name required"}), 400
@@ -84,7 +83,6 @@ def api_update_student(sid):
     if idx is None:
         return jsonify({"error": "not found"}), 404
 
-    # update allowed fields
     students[idx][1] = str(payload.get("name", students[idx][1]))
     students[idx][2] = str(payload.get("age", students[idx][2]))
     students[idx][3] = str(payload.get("course", students[idx][3]))
@@ -102,17 +100,14 @@ def api_delete_student(sid):
     save_students(students)
     return jsonify(removed), 200
 
-# Serve frontend
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
-    # If path file exists in static, serve it; otherwise serve index.html
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
 
 if __name__ == "__main__":
-    # Create empty data file if missing
     if not os.path.exists(DATA_FILE):
         save_students([])
     app.run(host="0.0.0.0", port=5000, debug=True)
